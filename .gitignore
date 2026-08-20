@@ -1,0 +1,41 @@
+# Local secrets
+.env
+.env.*
+
+# Private knowledge-base data and runtime state
+data/
+storage/
+qdrant_storage/
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+.python-packages/
+
+# Frontend
+node_modules/
+dist/
+coverage/
+.npm-cache/
+
+# Local design and agent sessions
+.impeccable/
+.superpowers/
+docs/superpowers/
+
+# Editors and operating system
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

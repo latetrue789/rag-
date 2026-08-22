@@ -93,6 +93,43 @@ class DocumentRepository:
             error_message=error_message,
         )
 
+    def mark_missing(self, document_id: str) -> DocumentRecord:
+        current = self.get(document_id)
+        return self._update_status(
+            document_id,
+            DocumentStatus.MISSING,
+            chunk_count=current.chunk_count,
+            error_message="源文件已从资料目录移除，请确认是否清除知识库记录",
+        )
+
+    def restore_indexed(self, document_id: str) -> DocumentRecord:
+        current = self.get(document_id)
+        return self._update_status(
+            document_id,
+            DocumentStatus.INDEXED,
+            chunk_count=current.chunk_count,
+            error_message=None,
+        )
+
+    def update_source(
+        self,
+        document_id: str,
+        *,
+        filename: str,
+        source_path: str,
+        file_type: str,
+    ) -> DocumentRecord:
+        with self.database.connect() as connection:
+            connection.execute(
+                """
+                UPDATE documents
+                SET filename = ?, source_path = ?, file_type = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (filename, source_path, file_type, self._now(), document_id),
+            )
+        return self.get(document_id)
+
     def soft_delete(self, document_id: str) -> DocumentRecord:
         current = self.get(document_id)
         return self._update_status(

@@ -23,7 +23,7 @@ export interface DocumentItem {
   id: string
   filename: string
   file_type: string
-  status: 'pending' | 'indexed' | 'failed' | 'deleted'
+  status: 'pending' | 'indexed' | 'failed' | 'missing' | 'deleted'
   chunk_count: number
   error_message: string | null
   updated_at: string
@@ -32,6 +32,25 @@ export interface DocumentItem {
 export interface DocumentListResponse {
   items: DocumentItem[]
   total: number
+}
+
+export interface DocumentScanSummary {
+  indexed: number
+  skipped: number
+  failed: number
+  waiting: number
+  missing: number
+  oversized: number
+  busy: boolean
+  scanned_at: string | null
+}
+
+export interface DocumentScanStatus {
+  directory: string
+  subdirectories: string[]
+  interval_seconds: number
+  scanning: boolean
+  last_scan: DocumentScanSummary | null
 }
 
 export interface EvaluationMetrics {

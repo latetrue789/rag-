@@ -3,7 +3,18 @@
 .env.*
 
 # Private knowledge-base data and runtime state
-data/
+data/*
+!data/documents/
+data/documents/*
+!data/documents/md/
+!data/documents/txt/
+!data/documents/pdf/
+data/documents/md/*
+data/documents/txt/*
+data/documents/pdf/*
+!data/documents/md/.gitkeep
+!data/documents/txt/.gitkeep
+!data/documents/pdf/.gitkeep
 storage/
 qdrant_storage/
 *.db

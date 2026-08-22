@@ -1,42 +1,100 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 
 import { api } from '../api/client'
 import AppShell from '../components/AppShell.vue'
-import type { DocumentItem } from '../types'
+import type {
+  DocumentItem,
+  DocumentScanStatus,
+  DocumentScanSummary,
+} from '../types'
 
 const documents = ref<DocumentItem[]>([])
+const scanStatus = ref<DocumentScanStatus | null>(null)
 const loading = ref(true)
 const error = ref('')
 const deleting = ref('')
+const retrying = ref('')
+const scanning = ref(false)
+let refreshTimer: number | undefined
 
 async function loadDocuments() {
   loading.value = true
   error.value = ''
   try {
-    documents.value = (await api.documents()).items
+    const [documentResponse, statusResponse] = await Promise.all([
+      api.documents(),
+      api.documentScanStatus(),
+    ])
+    documents.value = documentResponse.items
+    scanStatus.value = statusResponse
   } catch (reason) {
-    error.value = reason instanceof Error ? reason.message : '资料列表加载失败。'
+    error.value = reason instanceof Error ? reason.message : '资料状态加载失败。'
   } finally {
     loading.value = false
   }
 }
 
+async function refreshStatus() {
+  try {
+    const [documentResponse, statusResponse] = await Promise.all([
+      api.documents(),
+      api.documentScanStatus(),
+    ])
+    documents.value = documentResponse.items
+    scanStatus.value = statusResponse
+  } catch {
+    // Background refresh stays quiet; the visible retry handles blocking errors.
+  }
+}
+
+async function scanNow() {
+  if (scanning.value) return
+  scanning.value = true
+  error.value = ''
+  try {
+    const result = await api.scanDocuments()
+    scanStatus.value = scanStatus.value
+      ? { ...scanStatus.value, scanning: false, last_scan: result }
+      : null
+    await refreshStatus()
+  } catch (reason) {
+    error.value = reason instanceof Error ? reason.message : '扫描失败，请检查本地服务。'
+  } finally {
+    scanning.value = false
+  }
+}
+
 async function removeDocument(document: DocumentItem) {
-  if (!window.confirm(`确认从知识库删除“${document.filename}”？`)) return
+  if (document.status !== 'missing') return
+  if (!window.confirm(`确认清除“${document.filename}”的知识库向量和记录？本地原文件不会被删除。`)) return
   deleting.value = document.id
   error.value = ''
   try {
     await api.deleteDocument(document.id)
     documents.value = documents.value.filter((item) => item.id !== document.id)
   } catch (reason) {
-    error.value = reason instanceof Error ? reason.message : '删除失败。'
+    error.value = reason instanceof Error ? reason.message : '清除失败。'
   } finally {
     deleting.value = ''
   }
 }
 
-function formatDate(value: string) {
+async function retryDocument(document: DocumentItem) {
+  retrying.value = document.id
+  error.value = ''
+  try {
+    await api.retryDocument(document.id)
+    await refreshStatus()
+  } catch (reason) {
+    error.value = reason instanceof Error ? reason.message : '重试失败。'
+  } finally {
+    retrying.value = ''
+  }
+}
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return '尚未扫描'
   return new Intl.DateTimeFormat('zh-CN', {
     month: 'short',
     day: 'numeric',
@@ -46,36 +104,78 @@ function formatDate(value: string) {
 }
 
 function statusText(status: DocumentItem['status']) {
-  return { pending: '等待索引', indexed: '已索引', failed: '失败', deleted: '已删除' }[status]
+  return {
+    pending: '等待索引',
+    indexed: '已索引',
+    failed: '索引失败',
+    missing: '源文件已移除',
+    deleted: '已删除',
+  }[status]
 }
 
-onMounted(loadDocuments)
+function scanSummary(result: DocumentScanSummary | null | undefined) {
+  if (!result) return '等待首次扫描'
+  if (result.busy) return '已有扫描任务正在运行'
+  const changes = [
+    result.indexed ? `新增或更新 ${result.indexed}` : '',
+    result.missing ? `待确认清除 ${result.missing}` : '',
+    result.failed ? `失败 ${result.failed}` : '',
+    result.waiting ? `等待文件稳定 ${result.waiting}` : '',
+    result.oversized ? `超限 ${result.oversized}` : '',
+  ].filter(Boolean)
+  return changes.length ? changes.join(' · ') : '没有发现变化'
+}
+
+onMounted(() => {
+  void loadDocuments()
+  refreshTimer = window.setInterval(() => void refreshStatus(), 15_000)
+})
+
+onUnmounted(() => {
+  if (refreshTimer !== undefined) window.clearInterval(refreshTimer)
+})
 </script>
 
 <template>
-  <AppShell title="文档管理" subtitle="查看本地资料的解析与索引状态">
-    <section class="import-guide">
-      <div>
-        <p class="section-kicker">从本地目录导入</p>
-        <h2>先收集资料，再执行一次批量索引</h2>
-        <p>支持 Markdown、TXT 和可复制文字的 PDF。内容不变的文件再次运行会自动跳过。</p>
+  <AppShell title="文档管理" subtitle="把资料放进固定目录，系统会自动解析并更新知识库">
+    <section class="import-guide sync-guide" aria-labelledby="sync-heading">
+      <div class="sync-copy">
+        <p class="section-kicker">自动同步目录</p>
+        <h2 id="sync-heading">data/documents/</h2>
+        <p>资料每 60 秒检查一次。文件内容没有变化时不会调用 Ollama，也不会重复生成向量。</p>
+        <div class="directory-list" aria-label="推荐资料子目录">
+          <span>md/</span><span>txt/</span><span>pdf/</span>
+        </div>
       </div>
-      <code>python -m app.cli ingest &lt;文件路径&gt;</code>
+      <div class="sync-control" aria-live="polite">
+        <span class="sync-state">
+          {{ scanning || scanStatus?.scanning ? '正在扫描资料…' : scanSummary(scanStatus?.last_scan) }}
+        </span>
+        <small>上次扫描：{{ formatDate(scanStatus?.last_scan?.scanned_at) }}</small>
+        <button
+          class="primary-button"
+          type="button"
+          :disabled="scanning || scanStatus?.scanning"
+          @click="scanNow"
+        >
+          {{ scanning || scanStatus?.scanning ? '扫描中' : '立即扫描' }}
+        </button>
+      </div>
     </section>
 
     <div v-if="error" class="error-message compact" role="alert">
-      <span>{{ error }}</span><button type="button" @click="loadDocuments">重试</button>
+      <span>{{ error }}</span><button type="button" @click="loadDocuments">重试加载</button>
     </div>
 
     <section class="data-section" aria-labelledby="documents-heading">
       <div class="section-heading-row">
-        <div><p class="section-kicker">知识库内容</p><h2 id="documents-heading">已导入资料</h2></div>
+        <div><p class="section-kicker">知识库内容</p><h2 id="documents-heading">资料状态</h2></div>
         <span>{{ documents.length }} 份</span>
       </div>
       <div v-if="loading" class="empty-state">正在读取资料状态…</div>
       <div v-else-if="!documents.length" class="empty-state">
         <strong>知识库还是空的</strong>
-        <p>准备好岗位 JD、面试笔记或学习资料后，用上方命令完成首次导入。</p>
+        <p>把 Markdown、TXT 或可复制文字的 PDF 放入上方对应子目录，系统会自动处理。</p>
       </div>
       <div v-else class="document-table-wrap">
         <table class="document-table">
@@ -91,10 +191,26 @@ onMounted(loadDocuments)
               </td>
               <td>{{ document.chunk_count }}</td>
               <td>{{ formatDate(document.updated_at) }}</td>
-              <td>
-                <button class="text-button danger" type="button" :disabled="deleting === document.id" @click="removeDocument(document)">
-                  {{ deleting === document.id ? '删除中' : '删除' }}
+              <td class="document-actions">
+                <button
+                  v-if="document.status === 'missing'"
+                  class="text-button danger"
+                  type="button"
+                  :disabled="deleting === document.id"
+                  @click="removeDocument(document)"
+                >
+                  {{ deleting === document.id ? '清除中' : '确认清除' }}
                 </button>
+                <button
+                  v-else-if="document.status === 'failed'"
+                  class="text-button"
+                  type="button"
+                  :disabled="retrying === document.id"
+                  @click="retryDocument(document)"
+                >
+                  {{ retrying === document.id ? '重试中' : '重试' }}
+                </button>
+                <span v-else class="no-action">自动维护</span>
               </td>
             </tr>
           </tbody>

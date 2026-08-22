@@ -13,6 +13,7 @@ from app.services.answering import AnsweringService
 from app.services.chunker import Chunker
 from app.services.documents import DocumentService
 from app.services.evaluation import EvaluationService, LLMJudge
+from app.services.folder_sync import FolderSyncService
 from app.services.health import HealthService
 from app.services.ingestion import IngestionService
 from app.services.rag import RagService
@@ -56,6 +57,17 @@ class ServiceContainer:
                 overlap=self.settings.chunk_overlap,
             ),
             collection=self.settings.qdrant_collection,
+            embedding_batch_size=self.settings.embedding_batch_size,
+        )
+
+    @cached_property
+    def folder_sync(self) -> FolderSyncService:
+        return FolderSyncService(
+            root=self.settings.documents_directory,
+            ingestion=self.ingestion,
+            documents=self.documents,
+            stable_seconds=self.settings.document_stable_seconds,
+            max_size_mb=self.settings.document_max_size_mb,
         )
 
     @cached_property
@@ -90,6 +102,7 @@ class ServiceContainer:
             self.documents,
             self.vectors,
             self.settings.qdrant_collection,
+            watched_root=self.settings.documents_directory,
         )
 
     @cached_property

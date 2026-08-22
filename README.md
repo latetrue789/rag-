@@ -9,7 +9,7 @@
 - 使用 Qdrant 做向量检索，SQLite 保存文档与评测元数据。
 - LLM 使用 OpenAI 兼容 API，可替换服务地址和模型。
 - 事实性回答使用 `[S1]`、`[S2]` 行内引用；无证据时明确拒答。
-- 支持文档状态管理、增量索引、服务健康检查和 RAG 评测报告。
+- 自动监控 `data/documents/`，支持增量索引、缺失确认清除、服务健康检查和 RAG 评测报告。
 - Vue 工作台包含智能问答、文档管理、评测中心和模型设置。
 
 ## 技术栈
@@ -70,6 +70,10 @@ RAG_CHUNK_OVERLAP=120
 RAG_RETRIEVAL_TOP_K=5
 RAG_RETRIEVAL_SCORE_THRESHOLD=0.55
 RAG_EVALUATION_REPORT_DIR=storage/evaluations
+RAG_DOCUMENT_SCAN_INTERVAL_SECONDS=60
+RAG_DOCUMENT_STABLE_SECONDS=10
+RAG_DOCUMENT_MAX_SIZE_MB=25
+RAG_EMBEDDING_BATCH_SIZE=32
 ```
 
 ### 4. 启动后端
@@ -95,17 +99,20 @@ $env:PYTHONPATH = "$PWD\.python-packages;$PWD\backend"
 
 API 默认地址是 `http://127.0.0.1:8000`，接口文档位于 `http://127.0.0.1:8000/docs`。
 
-### 5. 导入资料
+### 5. 放入资料
 
-可以传单个文件，也可以传目录。目录会递归查找支持的文件；相同内容再次运行会自动跳过，修改后的文件会替换旧索引。
+把资料放进项目根目录的对应子目录：
 
-```powershell
-cd backend
-$materialsPath = Read-Host "请输入资料文件或目录路径"
-python -m app.cli ingest $materialsPath
+```text
+data/documents/
+├─ md/    Markdown 文档
+├─ txt/   纯文本
+└─ pdf/   可提取文字的 PDF
 ```
 
-资料不需要每次提问都重新上传。首次导入一次即可；只有新增或修改文件时才重新运行导入命令。
+后端启动时扫描一次，此后默认每 60 秒扫描。网页“文档管理”页也可以点击“立即扫描”。没有变化的文件不会调用 Ollama；新文件需保持稳定 10 秒后才会处理，单文件默认上限为 25 MB。
+
+资料只需放入一次，不需要每次提问都上传。修改文件会自动更新索引；从目录移除文件后，网页会显示“源文件已移除”，确认清除后才删除对应向量和记录。
 
 ### 6. 启动前端
 
@@ -140,12 +147,7 @@ $dockerCli = "$env:LOCALAPPDATA\Programs\DockerDesktop\resources\bin\docker.exe"
 
 访问 `http://127.0.0.1:8080`。前端只对外暴露一个入口；Qdrant 与后端通过 Compose 内部网络通信。
 
-在容器模式导入本地资料时，把目录只读挂载到临时后端容器：
-
-```powershell
-$materialsDir = Read-Host "请输入资料目录路径"
-& $dockerCli compose run --rm -v "${materialsDir}:/data:ro" backend python -m app.cli ingest /data
-```
+Compose 会把 `./data/documents` 只读挂载到后端容器。把资料放入三个分类目录后，后台会自动同步，无需执行额外导入命令。
 
 如果容器无法访问主机 Ollama，请让 Ollama 监听主机接口后重启它。容器默认使用 `http://host.docker.internal:11434`；需要覆盖时在 `.env` 增加 `RAG_DOCKER_EMBEDDING_BASE_URL`。
 
@@ -174,7 +176,10 @@ npm run build
 
 - `POST /api/v1/ask`：带来源引用的 RAG 问答
 - `GET /api/v1/documents`：文档与索引状态
-- `DELETE /api/v1/documents/{document_id}`：删除文档及向量
+- `GET /api/v1/documents/scan`：自动同步状态
+- `POST /api/v1/documents/scan`：立即扫描固定资料目录
+- `POST /api/v1/documents/{document_id}/retry`：重试失败文档
+- `DELETE /api/v1/documents/{document_id}`：确认清除缺失文档及向量
 - `POST /api/v1/evaluations/run`：运行评测用例
 - `GET /api/v1/evaluations/runs`：查询评测结果
 - `GET /api/v1/health`：检查 SQLite、Qdrant、Ollama 与 LLM 配置

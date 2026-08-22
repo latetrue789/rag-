@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     retrieval_top_k: int = 5
     retrieval_score_threshold: float = 0.55
     evaluation_report_dir: str = "storage/evaluations"
+    documents_dir: str = "data/documents"
+    document_scan_interval_seconds: int = 60
+    document_stable_seconds: int = 10
+    document_max_size_mb: int = 25
+    embedding_batch_size: int = 32
 
     @property
     def llm_configured(self) -> bool:
@@ -43,6 +48,11 @@ class Settings(BaseSettings):
     @property
     def evaluation_report_directory(self) -> Path:
         path = Path(self.evaluation_report_dir)
+        return path if path.is_absolute() else PROJECT_ROOT / path
+
+    @property
+    def documents_directory(self) -> Path:
+        path = Path(self.documents_dir)
         return path if path.is_absolute() else PROJECT_ROOT / path
 
 

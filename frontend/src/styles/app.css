@@ -1172,3 +1172,120 @@ p {
     transition-duration: 0.01ms !important;
   }
 }
+.sync-guide {
+  align-items: stretch;
+}
+
+.sync-copy {
+  min-width: 0;
+}
+
+.sync-copy h2 {
+  overflow-wrap: anywhere;
+}
+
+.directory-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.directory-list span {
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--blue-700);
+  background: var(--blue-50);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sync-control {
+  display: flex;
+  min-width: 280px;
+  padding-inline-start: 30px;
+  border-inline-start: 1px solid var(--line);
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
+}
+
+.sync-state {
+  color: var(--ink-950);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.sync-control small {
+  color: var(--ink-500);
+}
+
+.primary-button {
+  min-height: 46px;
+  margin-top: 8px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--surface);
+  background: var(--blue-600);
+  font-weight: 700;
+  transition: background 160ms ease-out, transform 160ms ease-out;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: var(--blue-700);
+  transform: translateY(-1px);
+}
+
+.status-label.missing {
+  color: var(--warning);
+  background: var(--warning-bg);
+}
+
+.document-table td:first-child strong {
+  max-width: 34ch;
+  overflow-wrap: anywhere;
+}
+
+.document-actions {
+  min-width: 112px;
+  text-align: end;
+}
+
+.no-action {
+  color: var(--ink-500);
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .sync-control {
+    min-width: 0;
+    padding-block-start: 22px;
+    padding-inline-start: 0;
+    border-block-start: 1px solid var(--line);
+    border-inline-start: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .sync-control,
+  .primary-button {
+    width: 100%;
+  }
+
+  .document-actions {
+    min-width: 100px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .primary-button {
+    transition: none;
+  }
+
+  .primary-button:hover:not(:disabled) {
+    transform: none;
+  }
+}

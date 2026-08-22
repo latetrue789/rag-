@@ -21,10 +21,16 @@ services:
       RAG_LLM_BASE_URL: ${RAG_LLM_BASE_URL:-}
       RAG_LLM_API_KEY: ${RAG_LLM_API_KEY:-}
       RAG_LLM_MODEL: ${RAG_LLM_MODEL:-}
+      RAG_DOCUMENTS_DIR: /knowledge
+      RAG_DOCUMENT_SCAN_INTERVAL_SECONDS: ${RAG_DOCUMENT_SCAN_INTERVAL_SECONDS:-60}
+      RAG_DOCUMENT_STABLE_SECONDS: ${RAG_DOCUMENT_STABLE_SECONDS:-10}
+      RAG_DOCUMENT_MAX_SIZE_MB: ${RAG_DOCUMENT_MAX_SIZE_MB:-25}
+      RAG_EMBEDDING_BATCH_SIZE: ${RAG_EMBEDDING_BATCH_SIZE:-32}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - app_storage:/workspace/storage
+      - ./data/documents:/knowledge:ro
     expose:
       - "8000"
 

@@ -6,6 +6,7 @@ class DocumentStatus(StrEnum):
     PENDING = "pending"
     INDEXED = "indexed"
     FAILED = "failed"
+    MISSING = "missing"
     DELETED = "deleted"
 
 

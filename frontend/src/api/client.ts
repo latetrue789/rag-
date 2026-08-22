@@ -1,6 +1,8 @@
 import type {
   AskResponse,
   DocumentListResponse,
+  DocumentScanStatus,
+  DocumentScanSummary,
   EvaluationRun,
   HealthResponse,
 } from '../types'
@@ -39,6 +41,15 @@ export const api = {
   },
   deleteDocument(id: string) {
     return request<void>(`/documents/${id}`, { method: 'DELETE' })
+  },
+  documentScanStatus() {
+    return request<DocumentScanStatus>('/documents/scan')
+  },
+  scanDocuments() {
+    return request<DocumentScanSummary>('/documents/scan', { method: 'POST' })
+  },
+  retryDocument(id: string) {
+    return request<void>(`/documents/${id}/retry`, { method: 'POST' })
   },
   health() {
     return request<HealthResponse>('/health')

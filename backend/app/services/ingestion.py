@@ -34,12 +34,14 @@ class IngestionService:
         embeddings: EmbeddingProvider,
         chunker: Chunker,
         collection: str,
+        embedding_batch_size: int = 32,
     ) -> None:
         self.documents = documents
         self.vectors = vectors
         self.embeddings = embeddings
         self.chunker = chunker
         self.collection = collection
+        self.embedding_batch_size = embedding_batch_size
 
     def ingest(self, path: Path) -> IngestionOutcome:
         source = path.resolve()
@@ -61,7 +63,10 @@ class IngestionService:
             chunks = self.chunker.split(sections)
             if not chunks:
                 raise ValueError("文档中没有可索引的文字")
-            vectors = self.embeddings.embed([chunk.text for chunk in chunks])
+            vectors: list[list[float]] = []
+            for start in range(0, len(chunks), self.embedding_batch_size):
+                batch = chunks[start : start + self.embedding_batch_size]
+                vectors.extend(self.embeddings.embed([chunk.text for chunk in batch]))
             if len(vectors) != len(chunks) or not vectors or not vectors[0]:
                 raise ValueError("Embedding provider returned invalid vectors")
             self.vectors.ensure_collection(self.collection, len(vectors[0]))
